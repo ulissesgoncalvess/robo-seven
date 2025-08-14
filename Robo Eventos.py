@@ -28,8 +28,8 @@ def executar_automacao():
     title="Salvar planilha como")
  USER = "emanuele@sevensuprimentos.com.br"
  PASS = "*Eas251080"
- #HOJE =(date.today() - timedelta(days=1)).strftime("%d/%m/%y")
- HOJE = date.today().strftime("%d/%m/%y")
+ HOJE =(date.today() - timedelta(days=1)).strftime("%d/%m/%y")
+ #HOJE = date.today().strftime("%d/%m/%y")
  ONTEM = (date.today() - timedelta(days=1)).strftime("%d/%m/%y")
  ESTADOS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
            'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
@@ -84,13 +84,13 @@ def executar_automacao():
             data_evento = dados[2]
             
             # Se encontrou uma linha com data de ontem, para tudo
-            if data_evento == ONTEM:
+            if data_evento < HOJE:
                 encontrou_ontem = True
                 break
 
             # Continua normalmente se a data for diferente de hoje
             if data_evento != HOJE:
-                continue
+                break
 
             numero_do_evento = dados[0]
             dataFinal = dados[3]
