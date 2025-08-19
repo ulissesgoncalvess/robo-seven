@@ -8,11 +8,27 @@ from datetime import date, timedelta
 from tkinter.filedialog import asksaveasfilename
 import time
 import os
+import tkinter as tk
+from tkinter import simpledialog
 # --- CONFIGURAÇÕES DE USUÁRIO ---
 USER = "emanuele@sevensuprimentos.com.br"
 PASS = "*Eas251080"
-HOJE = (date.today() - timedelta(days=11)).strftime("%d/%m/%y")
-ONTEM = (date.today() - timedelta(days=12)).strftime("%d/%m/%y")
+
+# Iput de data
+root = tk.Tk()
+root.withdraw()
+data_usuario = simpledialog.askstring(
+    title="Input",
+    prompt="Digite a data desejada no formato DDMMAA (ex: 190825 para 19/08/25):"
+)
+if data_usuario and len(data_usuario.strip()) == 6 and data_usuario.isdigit():
+    HOJE = f"{data_usuario[:2]}/{data_usuario[2:4]}/{data_usuario[4:]}"
+else:
+    raise ValueError("Data inválida! Use o formato DDMMAA, ex: 190825")
+root.destroy()
+
+#HOJE = (date.today() - timedelta(days=11)).strftime("%d/%m/%y")
+#ONTEM = (date.today() - timedelta(days=12)).strftime("%d/%m/%y")
 
 ESTADOS = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
@@ -121,3 +137,4 @@ while True:
 wb.save(EXCEL_PATH)
 print(f"💾 Planilha salva em: {EXCEL_PATH}")
 
+# --- DETALHA CADA EVENTO ---
