@@ -28,7 +28,7 @@ def executar_automacao():
     title="Salvar planilha como")
  USER = "emanuele@sevensuprimentos.com.br"
  PASS = "*Eas251080"
- HOJE =(date.today() - timedelta(days=1)).strftime("%d/%m/%y")
+ HOJE =(date.today() - timedelta(days=3)).strftime("%d/%m/%y")
  #HOJE = date.today().strftime("%d/%m/%y")
  ONTEM = (date.today() - timedelta(days=1)).strftime("%d/%m/%y")
  ESTADOS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',

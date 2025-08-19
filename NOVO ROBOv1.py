@@ -14,8 +14,8 @@ import re
 USER = "emanuele@sevensuprimentos.com.br"
 PASS = "*Eas251080"
 #HOJE = date.today().strftime("%d/%m/%y")  # Data que será filtrada
-HOJE =(date.today() - timedelta(days=3)).strftime("%d/%m/%y")
-ONTEM = (date.today() - timedelta(days=4)).strftime("%d/%m/%y")
+HOJE =(date.today() - timedelta(days=10)).strftime("%d/%m/%y")
+ONTEM = (date.today() - timedelta(days=11)).strftime("%d/%m/%y")
 
 ESTADOS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
            'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']
@@ -51,10 +51,15 @@ while True:
 driver.get("https://supplier.coupahost.com/quotes/private_events/")
 time.sleep(5)
 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+# entrar no iframe
+iframe = driver.find_element(By.ID, "common-iframe")
+driver.switch_to.frame(iframe)
+
 # --- COLETA EVENTOS POR DATA ---
 while True:
     try:
-       botao90 = driver.find_element(By.CSS_SELECTOR,'#header-container > div > div.coupaUI > div > div.coupaTable__outerContainer > div.coupaTableWithSidePanel__tablePanel.s-coupaTableWithSidePanel__tablePanel > div > div.coupaTable__pagination > div.rowsPerPage.s-rowsPerPage > button:nth-child(6)')
+       botao90 = driver.find_element(By.CLASS_NAME,'div.rowsPerPage.s-rowsPerPage > button:nth-child(6)')
        break
     except:
      print('Naõ encontrado')
@@ -65,3 +70,50 @@ while True:
         break
     except:
         print("Botão não clicado")
+        
+while True:
+    time.sleep(5)
+    tbody = driver.find_element(By.XPATH, '//*[@id="quote_request_table_tag"]')
+    linhas = tbody.find_elements(By.TAG_NAME, "tr")
+
+    encontrou_ontem = False  # flag de parada
+
+    for linha in linhas:
+        try:
+            colunas = linha.find_elements(By.TAG_NAME, "td")
+            dados = [coluna.text for coluna in colunas]
+
+            if not dados or len(dados) < 4:
+                continue
+
+            data_evento = dados[2]
+            
+            # Se encontrou uma linha com data de ontem, para tudo
+            if data_evento < HOJE:
+                encontrou_ontem = True
+                break
+
+            # Continua normalmente se a data for diferente de hoje
+            if data_evento != HOJE:
+                break
+
+            numero_do_evento = dados[0]
+            dataFinal = dados[3]
+            vazio = ''
+            ws.append([numero_do_evento, vazio, dataFinal])
+
+        except:
+            pass
+
+    if encontrou_ontem:
+        break
+
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+    try:
+        proximo = driver.find_element(By.CLASS_NAME, "next_page")
+        proximo.click()
+    except:
+        break
+ # Salva as alterações
+wb.save(EXCEL_PATH)
