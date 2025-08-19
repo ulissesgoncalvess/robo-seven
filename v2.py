@@ -114,6 +114,8 @@ while True:
 
      except Exception as e:
         print(f"⚠️ Não foi possível extrair dados da linha: {e}")
+    if encontrou_ontem:
+        break
     try:
         botao_avancar = driver.find_element(By.XPATH, '//button[.//span[text()="Avançar"] and not(@disabled)]')
         print("✅ Botão 'Avançar' encontrado, clicando...")
@@ -133,8 +135,20 @@ while True:
         print(f"Não tem mais páginas ou erro ao clicar no botão 'Avançar': {e}")
         break
     
-# Salva a planilha ao final
+# Salva a planilha ao final da busca de eventos
 wb.save(EXCEL_PATH)
 print(f"💾 Planilha salva em: {EXCEL_PATH}")
 
 # --- DETALHA CADA EVENTO ---
+wb = load_workbook(EXCEL_PATH)
+ws = wb["Eventos"]
+
+for row in ws.iter_rows(min_row=2):
+    evento = row[0].value
+    if not evento:
+        continue
+
+    url_evento = f"https://supplier.coupahost.com/quotes/private_events/{evento}?customer_id=3779817"
+    driver.get(url_evento)
+    time.sleep(3)  # Aguarda a página carregar completamente
+    #wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
