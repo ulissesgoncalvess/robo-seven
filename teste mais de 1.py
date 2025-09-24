@@ -195,51 +195,131 @@ def executar_funcao():
             wb.save(EXCEL_PATH)
             linhas_evento = [r for r in ws.iter_rows(min_row=2) if r[0].value == evento]
 
-        # Percorre cada s-expandLines e coleta os dados
-        for idx, el in enumerate(elementos):
+        # Percorre cada s-expandLines e coleta os dados (re-fetch a cada iteração, marca processed via JS)
+        def click_element_retry(el, attempts=4, pause=0.4):
+            from selenium.common.exceptions import (
+                StaleElementReferenceException,
+                ElementClickInterceptedException,
+                ElementNotInteractableException,
+                WebDriverException,
+            )
+            for _ in range(attempts):
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+                    time.sleep(0.15)
+                    el.click()
+                    return True
+                except (StaleElementReferenceException, ElementClickInterceptedException, ElementNotInteractableException, WebDriverException):
+                    try:
+                        driver.execute_script("arguments[0].click();", el)
+                        return True
+                    except Exception:
+                        time.sleep(pause)
+            return False
+
+        # determina quantos existem no DOM no momento (evita usar lista obsoleta)
+        total = driver.execute_script("return document.querySelectorAll('.s-expandLines').length")
+        if total == 0:
+            print(f"⚠️ Nenhum s-expandLines encontrado no evento {evento}")
+            continue
+
+        # duplicar linha já feito acima; garante linhas_evento atualizado
+        linhas_evento = [r for r in ws.iter_rows(min_row=2) if r[0].value == evento]
+
+        processed = 0
+        max_attempts_per_index = 5
+        idx = 0
+        while processed < total and idx < total:
+            # re-obtem a lista sempre
             try:
-                wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "s-expandLines")))
-                el.click()
-                time.sleep(1)  # pequena pausa para expandir
+                elementos = driver.find_elements(By.CLASS_NAME, "s-expandLines")
             except Exception:
-                print(f"⚠️ Não consegui clicar no expandLines {idx}")
+                time.sleep(0.3)
+                elementos = driver.find_elements(By.CLASS_NAME, "s-expandLines")
+
+            if idx >= len(elementos):
+                # DOM encolheu — tenta refetch algumas vezes
+                retry_try = 0
+                while retry_try < 3 and idx >= len(elementos):
+                    time.sleep(0.4)
+                    elementos = driver.find_elements(By.CLASS_NAME, "s-expandLines")
+                    retry_try += 1
+                if idx >= len(elementos):
+                    print(f"⚠️ Índice {idx} fora do range atual ({len(elementos)}). Pulando.")
+                    idx += 1
+                    continue
+
+            el = elementos[idx]
+
+            # evita re-processar elemento já marcado
+            already = driver.execute_script("return arguments[0].getAttribute('data-processed')", el)
+            if already:
+                idx += 1
+                processed += 1
                 continue
 
-            # segura a linha atual (cada linha é uma tuple de células)
+            # tenta clicar de forma robusta
+            if not click_element_retry(el, attempts=4, pause=0.4):
+                print(f"⚠️ Falha ao clicar no expandLines index {idx} do evento {evento}")
+                # marca como processado para não travar loop
+                try:
+                    driver.execute_script("arguments[0].setAttribute('data-processed','1')", el)
+                except Exception:
+                    pass
+                idx += 1
+                processed += 1
+                continue
+
+            # após clique, espera conteúdo de detalhe carregar (xpath de descrição)
+            try:
+                wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]')))
+                time.sleep(0.25)
+            except Exception:
+                time.sleep(0.4)
+
+            # atualiza linhas_evento porque podem ter sido adicionadas
+            linhas_evento = [r for r in ws.iter_rows(min_row=2) if r[0].value == evento]
             try:
                 linha_atual = linhas_evento[idx]
-            except IndexError:
-                print(f"⚠️ Índice {idx} fora de range para linhas_evento do evento {evento}")
-                continue
+            except Exception:
+                # se não existir, tenta mapear para próxima disponível
+                if linhas_evento:
+                    linha_atual = linhas_evento[-1]
+                else:
+                    print(f"⚠️ Não há linha disponível para evento {evento} no idx {idx}")
+                    # marca e segue
+                    try:
+                        driver.execute_script("arguments[0].setAttribute('data-processed','1')", el)
+                    except Exception:
+                        pass
+                    idx += 1
+                    processed += 1
+                    continue
 
-            # quantidade
+            # coleta campos (mesma lógica, com pequenos waits)
             try:
-                quantidade = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[2]/div/div[2]/div/p/span[1]').text
-                linha_atual[4].value = quantidade
+                quantidade_el = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[2]/div/div[2]/div/p/span[1]')
+                linha_atual[4].value = quantidade_el.text
             except Exception:
                 linha_atual[4].value = 'Não foi possivel coletar a quantidade'
 
-            # unidade
             try:
-                unidade = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[2]/div/div[2]/div/p/span[2]').text
-                linha_atual[5].value = unidade
+                unidade_el = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[2]/div/div[2]/div/p/span[2]')
+                linha_atual[5].value = unidade_el.text
             except Exception:
                 linha_atual[5].value = 'Não foi possivel coletar a unidade'
 
-            # descrição
             try:
-                descri = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[1]/div/div[2]/div/p').text
+                descri_el = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[1]/div/div[2]/div/p')
+                descri = descri_el.text
                 desejado = re.search(r'PT\s*\|\|\s*(.*?)\*{3,}', descri, re.DOTALL)
-                if desejado:
-                    linha_atual[3].value = desejado.group(1).strip()
-                else:
-                    linha_atual[3].value = descri
+                linha_atual[3].value = desejado.group(1).strip() if desejado else descri
             except Exception:
                 linha_atual[3].value = 'Não foi possivel coletar a descrição'
 
-            # UF
             try:
-                uf_text = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[1]/div/div[8]/div/ul/li[1]/span').text
+                uf_el = driver.find_element(By.XPATH, '//*[@id="itemsAndServicesApp"]/div/div/div[1]/div[2]/div[2]/div/form/div/div/div[1]/div/div[8]/div/ul/li[1]/span')
+                uf_text = uf_el.text
                 for sig in ESTADOS:
                     if sig in uf_text:
                         linha_atual[1].value = sig
@@ -247,23 +327,33 @@ def executar_funcao():
             except Exception:
                 linha_atual[1].value = 'Não foi possivel coletar a UF'
 
-                #fechar
+            # fecha o detalhe (tenta vários métodos)
             try:
-              time.sleep(1)
-              # Localiza o botão
-              fechar = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button.button.s-cancel")))
-              # Rola até o botão estar visível
-              driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", fechar)
-    
-              #  Espera até ele estar clicável
-              fechar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.button.s-cancel")))
-              # Clica no botão
-              fechar.click()
-              time.sleep(1)
+                time.sleep(0.2)
+                fechar = None
+                try:
+                    fechar = driver.find_element(By.CSS_SELECTOR, "button.button.s-cancel")
+                except Exception:
+                    try:
+                        fechar = driver.find_element(By.XPATH, "//button[contains(concat(' ', normalize-space(@class), ' '), ' s-cancel ') and contains(., 'Cancelar')]")
+                    except Exception:
+                        fechar = None
+                if fechar:
+                    click_element_retry(fechar, attempts=3, pause=0.2)
+                    time.sleep(0.25)
             except Exception:
-             pass
-        wb.save(EXCEL_PATH)
+                pass
 
+            # marca como processado (para não reprocessar se DOM reorganizar)
+            try:
+                driver.execute_script("arguments[0].setAttribute('data-processed','1')", el)
+            except Exception:
+                pass
+
+            processed += 1
+            idx += 1
+
+        wb.save(EXCEL_PATH)
     # Ordena a planilha por "Numero do evento" (coluna A) para agrupar linhas com o mesmo número
     try:
         wb = load_workbook(EXCEL_PATH)
